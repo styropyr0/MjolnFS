@@ -98,6 +98,7 @@ bool MjolnFileSystem::mount()
         printLogs("Last data address: " + String(lastDataAddr) + "\n");
         printLogs("File count: " + String(_fatEntryCount - (uint16_t)_bootSector.deleted) + "\n\n");
         isInit = true;
+        defragment();
         getBytesUsed();
     }
     else
@@ -154,6 +155,7 @@ bool MjolnFileSystem::updateFile(const char *filename, const char *data)
     if (!isFileSystemInitialized())
         return false;
 
+    defragment();
     uint16_t index = checkFileExistence(filename);
 
     if (index != MJOLN_FILE_NOT_FOUND)
@@ -215,6 +217,7 @@ bool MjolnFileSystem::writeFile(const char *filename, const char *data)
     if (!isFileSystemInitialized())
         return false;
 
+    defragment();
     if (checkFileExistence(filename) == MJOLN_FILE_NOT_FOUND)
     {
         uint32_t length = strlen(data);
@@ -448,6 +451,7 @@ float MjolnFileSystem::getStorageUsage()
     if (!isFileSystemInitialized())
         return -1;
 
+    defragment();
     printLogs("\nSTORAGE USAGE\n-------------\n");
     float usage = (_bootSector.bytesInUse * 100) / (pow(2, (uint8_t)_eepromType));
     printLogs(String(usage) + "\% used from available space.\n");
@@ -460,6 +464,7 @@ uint32_t MjolnFileSystem::getBytesUsed()
     if (!isFileSystemInitialized())
         return 0;
 
+    defragment();
     printLogs("\nSTORAGE USAGE\n-------------\n");
     printLogs(String(_bootSector.bytesInUse) + " bytes used from available space.\n");
     printLogs("Total: " + String((uint32_t)pow(2, (uint8_t)_eepromType)) + " bytes, " + String(getReservedSize()) + " bytes reserved by file system.\n\n");
@@ -611,5 +616,78 @@ void MjolnFileSystem::runInitialIndexingAndStore()
     {
         tempFatEntry = readFATEntry(i);
         fileLookupList += String(tempFatEntry.filename) + (i < _fatEntryCount ? "," : "");
+    }
+}
+
+void MjolnFileSystem::defragment()
+{
+    if (_bootSector.deleted == 0)
+        return;
+
+    printLogs("Defragmenting...\n");
+    uint32_t nextFreeAddr = getReservedSize();
+    uint16_t activeCount = _fatEntryCount - _bootSector.deleted;
+    uint16_t processed = 0;
+
+    while (processed < activeCount)
+    {
+        uint16_t minIdx = 0;
+        uint32_t minAddr = 0xFFFFFFFF;
+
+        for (uint16_t i = 1; i <= _fatEntryCount; i++)
+        {
+            FS_FATEntry e = readFATEntry(i);
+            if (e.status == MJOLN_FILE_SYSTEM_FAT_UNAVAILABLE)
+                continue;
+            uint32_t addr = e.startAddr[0] | (e.startAddr[1] << 8) | (e.startAddr[2] << 16);
+            if (addr >= nextFreeAddr && addr < minAddr)
+            {
+                minAddr = addr;
+                minIdx = i;
+            }
+        }
+
+        if (minIdx == 0)
+            break;
+
+        FS_FATEntry entry = readFATEntry(minIdx);
+        uint32_t fileSize = entry.size[0] | (entry.size[1] << 8) | (entry.size[2] << 16);
+
+        if (minAddr > nextFreeAddr)
+        {
+            moveData(minAddr, nextFreeAddr, fileSize);
+            entry.startAddr[0] = nextFreeAddr & 0xFF;
+            entry.startAddr[1] = (nextFreeAddr >> 8) & 0xFF;
+            entry.startAddr[2] = (nextFreeAddr >> 16) & 0xFF;
+            updateFATEntry(minIdx, entry);
+        }
+
+        nextFreeAddr += fileSize;
+        processed++;
+    }
+
+    _bootSector.lastDataAddr[0] = nextFreeAddr & 0xFF;
+    _bootSector.lastDataAddr[1] = (nextFreeAddr >> 8) & 0xFF;
+    _bootSector.lastDataAddr[2] = (nextFreeAddr >> 16) & 0xFF;
+    _bootSector.deleted = 0;
+    writeBootSector(_bootSector);
+    delay(5);
+    _bootSector = readBootSector();
+
+    printLogs("Defragmentation complete.\n");
+}
+
+void MjolnFileSystem::moveData(uint32_t srcAddr, uint32_t dstAddr, uint32_t length)
+{
+    uint8_t ps = getPageSize();
+    uint8_t pageBuf[128];
+    while (length > 0)
+    {
+        uint16_t chunk = (length > ps) ? ps : (uint16_t)length;
+        eepromReadBytes(MJOLN_STORAGE_DEVICE_ADDRESS, srcAddr, getAddressSize(), pageBuf, chunk, ps);
+        eepromWriteBytes(MJOLN_STORAGE_DEVICE_ADDRESS, dstAddr, getAddressSize(), pageBuf, chunk, ps);
+        srcAddr += chunk;
+        dstAddr += chunk;
+        length -= chunk;
     }
 }

@@ -139,6 +139,13 @@ public:
      */
     void terminal();
 
+    /**
+     * @brief Defragments the file system by compacting file data to eliminate holes. Speeds up file access and optimizes storage.
+     * @note Holes are created by file deletions and size-increasing updates.
+     * @note No effect if there are no holes.
+     */
+    void defragment();
+
 private:
     uint8_t _deviceAddress; // I2C address of the EEPROM
     uint32_t _eepromSize;   // Size of the EEPROM in bytes
@@ -167,6 +174,7 @@ private:
     void extractArgs(String command, String &filename, String &data);
     uint16_t findFileFromCache(const char *filename);
     void runInitialIndexingAndStore();
+    void moveData(uint32_t srcAddr, uint32_t dstAddr, uint32_t length);
 
     AT24CX_ADDR_SIZE getAddressSize();
 };

@@ -140,6 +140,7 @@ The `terminal()` function supports various commands for file system interactions
 | delpart                  | Format EEPROM and erase data    | `delpart`                   |
 | storeuse                 | Show storage usage %            | `storeuse`                  |
 | storeusebytes            | Show total used bytes           | `storeusebytes`             |
+| defrag                   | Defragment the file system      | `defrag`                    |
 | exit                     | Exit the terminal session       | `exit`                      |
 
 ---

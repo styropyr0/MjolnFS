@@ -89,6 +89,39 @@ void MjolnFileSystem::processCommand(String command)
         Serial.print("Bytes Used: ");
         Serial.println(getBytesUsed());
     }
+    else if (command.equals("defrag"))
+    {
+        defragment();
+        Serial.println("Defragmentation complete.");
+    }
+    else if (command.equals("exit"))
+    {
+        Serial.println("Exiting...");
+    }
+    else if (command.equals("sysinfo"))
+    {
+        Serial.println("\nSYSTEM INFORMATION\n------------------\n");
+        Serial.println("EEPROM type: " + String(_eepromType));
+        Serial.println("File system version: " + String(_bootSector.version));
+        Serial.println("File system signature: " + String(_bootSector.signature));
+        uint16_t lastDataAddr = _bootSector.lastDataAddr[0] | (_bootSector.lastDataAddr[1] << 8) | (_bootSector.lastDataAddr[2] << 16);
+        Serial.println("Last data address: " + String(lastDataAddr));
+        Serial.println("File count: " + String(_fatEntryCount - (uint16_t)_bootSector.deleted) + "\n");
+    }
+    else if (command.equals("help"))
+    {
+        Serial.println("\nAvailable commands:");
+        Serial.println("mk <filename> <data> - Create a new file with the specified name and data.");
+        Serial.println("update <filename> <data> - Update an existing file with new data.");
+        Serial.println("rm <filename> - Delete the specified file.");
+        Serial.println("ls - List all files in the system.");
+        Serial.println("read <filename> - Read and display the contents of a file.");
+        Serial.println("info - Display information about the file system.");
+        Serial.println("delpart - Format the file system, erasing all data.");
+        Serial.println("storeuse - Show storage usage as a percentage.");
+        Serial.println("storeusebytes - Show storage usage in bytes.");
+        Serial.println("defrag - Defragment the file system to optimize storage.\n");
+    }
     else
         Serial.println("Unknown command.");
 }
