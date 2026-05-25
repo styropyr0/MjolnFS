@@ -55,9 +55,7 @@ void MjolnFileSystem::processCommand(String command)
             if (buffer)
             {
                 if (readFile(filename.c_str(), buffer))
-                {
                     Serial.println(buffer);
-                }
                 else
                     Serial.println("ERR: File not found.");
 
@@ -73,6 +71,15 @@ void MjolnFileSystem::processCommand(String command)
     }
     else if (command.equals("info"))
         printFileSystemInfo();
+    else if (command.startsWith("info "))
+    {
+        String filename = command.substring(5);
+        filename.trim();
+        if (!filename.isEmpty())
+            printFileInfo(filename.c_str());
+        else
+            Serial.println("Usage: info <filename>");
+    }
     else if (command.equals("delpart"))
     {
         format();
@@ -94,6 +101,27 @@ void MjolnFileSystem::processCommand(String command)
         defragment();
         Serial.println("Defragmentation complete.");
     }
+    else if (command.startsWith("dump "))
+    {
+        bool logState = logEnabled;
+        showLogs(true);
+        String args = command.substring(5);
+        args.trim();
+        int spaceIndex = args.indexOf(' ');
+        if (spaceIndex != -1)
+        {
+            String startStr = args.substring(0, spaceIndex);
+            String endStr = args.substring(spaceIndex + 1);
+            startStr.trim();
+            endStr.trim();
+            uint32_t startAddr = strtoul(startStr.c_str(), nullptr, 0);
+            uint32_t endAddr = strtoul(endStr.c_str(), nullptr, 0);
+            showDump(startAddr, endAddr);
+        }
+        else
+            Serial.println("Usage: dump <start_address> <end_address>");
+        showLogs(logState);
+    }
     else if (command.equals("exit"))
     {
         Serial.println("Exiting...");
@@ -106,7 +134,7 @@ void MjolnFileSystem::processCommand(String command)
         Serial.println("File system signature: " + String(_bootSector.signature));
         uint16_t lastDataAddr = _bootSector.lastDataAddr[0] | (_bootSector.lastDataAddr[1] << 8) | (_bootSector.lastDataAddr[2] << 16);
         Serial.println("Last data address: " + String(lastDataAddr));
-        Serial.println("File count: " + String(_fatEntryCount - (uint16_t)_bootSector.deleted) + "\n");
+        Serial.println("File count: " + String(_fatEntryCount) + "\n");
     }
     else if (command.equals("help"))
     {

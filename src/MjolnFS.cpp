@@ -260,7 +260,7 @@ bool MjolnFileSystem::writeFile(const char *filename, const char *data)
             printLogs("----------------\n");
             printLogs("File written successfully.\n");
             printLogs("File name: " + String(fatEntry.filename) + "\n");
-            printLogs("File size: " + String(length) + " bytes\n");
+            printLogs("File size: " + String(length) + " Bytes\n");
             printLogs("File start address: " + String(startAddr) + "\n");
             printLogs("File status: " + String(fatEntry.status) + "\n");
             printLogs("File data: ");
@@ -294,7 +294,7 @@ uint32_t MjolnFileSystem::readFile(const char *filename, char *buffer)
             printLogs("----------------\n");
             printLogs("File read successfully.\n");
             printLogs("File name: " + String(tempFatEntry.filename) + "\n");
-            printLogs("File size: " + String(length) + " bytes\n");
+            printLogs("File size: " + String(length) + " Bytes\n");
             printLogs("File start address: " + String(startAddr) + "\n");
             printLogs("File data: ");
             for (size_t i = 0; i < length; i++)
@@ -321,34 +321,28 @@ bool MjolnFileSystem::deleteFile(const char *filename)
             uint32_t length = tempFatEntry.size[0] | (tempFatEntry.size[1] << 8) | (tempFatEntry.size[2] << 16);
             uint32_t startAddr = tempFatEntry.startAddr[0] | (tempFatEntry.startAddr[1] << 8) | (tempFatEntry.startAddr[2] << 16);
             printLogs("Deleting file...\n");
-            if (eepromDeleteMemoryRange(MJOLN_STORAGE_DEVICE_ADDRESS, startAddr, getAddressSize(), length, getPageSize()))
+
+            if ((_bootSector.lastDataAddr[0] | (_bootSector.lastDataAddr[1] << 8) | (_bootSector.lastDataAddr[2] << 16)) - length == startAddr)
             {
-                if ((_bootSector.lastDataAddr[0] | (_bootSector.lastDataAddr[1] << 8) | (_bootSector.lastDataAddr[2] << 16)) - length == startAddr)
-                {
-                    _bootSector.lastDataAddr[0] = (startAddr - length) & 0xFF;
-                    _bootSector.lastDataAddr[1] = ((startAddr - length) >> 8) & 0xFF;
-                    _bootSector.lastDataAddr[2] = ((startAddr - length) >> 16) & 0xFF;
-                }
-                _bootSector.bytesInUse -= length;
-                _bootSector.deleted++;
-                writeBootSector(_bootSector);
-                delay(5);
-                _bootSector = readBootSector();
+                _bootSector.lastDataAddr[0] = startAddr & 0xFF;
+                _bootSector.lastDataAddr[1] = (startAddr >> 8) & 0xFF;
+                _bootSector.lastDataAddr[2] = (startAddr >> 16) & 0xFF;
             }
-            else
-            {
-                printLogs("Failed to delete the file.\n");
-                tempFatEntry.status = 1;
-                updateFATEntry(i, tempFatEntry);
-                return false;
-            }
+
+            _bootSector.bytesInUse -= length;
+            _bootSector.deleted++;
+            updateFATEntry(i, tempFatEntry);
+            writeBootSector(_bootSector);
+            delay(5);
+            _bootSector = readBootSector();
+
             if (logEnabled)
             {
                 printLogs("\nFILE DELETE LOGS\n");
                 printLogs("----------------\n");
                 printLogs("File deleted successfully.\n");
                 printLogs("File name: " + String(tempFatEntry.filename) + "\n");
-                printLogs("File size: " + String(length) + " bytes\n");
+                printLogs("File size: " + String(length) + " Bytes\n");
                 printLogs("File start address: " + String(startAddr) + "\n");
                 printLogs("File status: DELETED\n\n");
             }
@@ -451,7 +445,6 @@ float MjolnFileSystem::getStorageUsage()
     if (!isFileSystemInitialized())
         return -1;
 
-    defragment();
     printLogs("\nSTORAGE USAGE\n-------------\n");
     float usage = (_bootSector.bytesInUse * 100) / (pow(2, (uint8_t)_eepromType));
     printLogs(String(usage) + "\% used from available space.\n");
@@ -464,7 +457,6 @@ uint32_t MjolnFileSystem::getBytesUsed()
     if (!isFileSystemInitialized())
         return 0;
 
-    defragment();
     printLogs("\nSTORAGE USAGE\n-------------\n");
     printLogs(String(_bootSector.bytesInUse) + " bytes used from available space.\n");
     printLogs("Total: " + String((uint32_t)pow(2, (uint8_t)_eepromType)) + " bytes, " + String(getReservedSize()) + " bytes reserved by file system.\n\n");
@@ -486,8 +478,9 @@ void MjolnFileSystem::printFileInfo(const char *filename)
         printLogs("\nFILE INFORMATION\n");
         printLogs("----------------\n");
         printLogs("File name: " + String(tempFatEntry.filename) + "\n");
-        printLogs("File size: " + String(length) + "\n");
+        printLogs("File size: " + String(length) + " Bytes\n");
         printLogs("File start address: " + String(startAddr) + "\n");
+        printLogs("File status: " + String(tempFatEntry.status == MJOLN_FILE_SYSTEM_FAT_AVAILABLE ? "AVAILABLE\n" : "DELETED\n") + "\n");
         printLogs("\n\n");
     }
     else
@@ -624,57 +617,59 @@ void MjolnFileSystem::defragment()
     if (_bootSector.deleted == 0)
         return;
 
+    uint32_t offset = 0;
+
     printLogs("Defragmenting...\n");
-    uint32_t nextFreeAddr = getReservedSize();
-    uint16_t activeCount = _fatEntryCount - _bootSector.deleted;
-    uint16_t processed = 0;
 
-    while (processed < activeCount)
+    uint16_t fileCount = _bootSector.fileCount[0] | (_bootSector.fileCount[1] << 8);
+    uint32_t prevEndAddr = getReservedSize();
+    uint16_t updatedFileCount = fileCount;
+
+    for (uint16_t i = 1; i <= fileCount; i++)
     {
-        uint16_t minIdx = 0;
-        uint32_t minAddr = 0xFFFFFFFF;
-
-        for (uint16_t i = 1; i <= _fatEntryCount; i++)
+        FS_FATEntry entry = readFATEntry(i);
+        if (entry.status == MJOLN_FILE_SYSTEM_FAT_AVAILABLE)
         {
-            FS_FATEntry e = readFATEntry(i);
-            if (e.status == MJOLN_FILE_SYSTEM_FAT_UNAVAILABLE)
-                continue;
-            uint32_t addr = e.startAddr[0] | (e.startAddr[1] << 8) | (e.startAddr[2] << 16);
-            if (addr >= nextFreeAddr && addr < minAddr)
+            uint32_t fileSize = entry.size[0] | (entry.size[1] << 8) | (entry.size[2] << 16);
+            uint32_t startAddr = entry.startAddr[0] | (entry.startAddr[1] << 8) | (entry.startAddr[2] << 16);
+            uint32_t endAddr = startAddr + fileSize;
+
+            if (prevEndAddr + 1 != startAddr && startAddr != getReservedSize())
             {
-                minAddr = addr;
-                minIdx = i;
+                moveData(startAddr, prevEndAddr, fileSize);
+                entry.startAddr[0] = prevEndAddr & 0xFF;
+                entry.startAddr[1] = (prevEndAddr >> 8) & 0xFF;
+                entry.startAddr[2] = (prevEndAddr >> 16) & 0xFF;
+                updateFATEntry(i, entry);
             }
-        }
 
-        if (minIdx == 0)
-            break;
-
-        FS_FATEntry entry = readFATEntry(minIdx);
-        uint32_t fileSize = entry.size[0] | (entry.size[1] << 8) | (entry.size[2] << 16);
-
-        if (minAddr > nextFreeAddr)
-        {
-            moveData(minAddr, nextFreeAddr, fileSize);
-            entry.startAddr[0] = nextFreeAddr & 0xFF;
-            entry.startAddr[1] = (nextFreeAddr >> 8) & 0xFF;
-            entry.startAddr[2] = (nextFreeAddr >> 16) & 0xFF;
-            updateFATEntry(minIdx, entry);
-        }
-
-        nextFreeAddr += fileSize;
-        processed++;
+            prevEndAddr += fileSize;
+        } 
+        else updatedFileCount--;
     }
 
-    _bootSector.lastDataAddr[0] = nextFreeAddr & 0xFF;
-    _bootSector.lastDataAddr[1] = (nextFreeAddr >> 8) & 0xFF;
-    _bootSector.lastDataAddr[2] = (nextFreeAddr >> 16) & 0xFF;
+    _bootSector.lastDataAddr[0] = prevEndAddr & 0xFF;
+    _bootSector.lastDataAddr[1] = (prevEndAddr >> 8) & 0xFF;
+    _bootSector.lastDataAddr[2] = (prevEndAddr >> 16) & 0xFF;
     _bootSector.deleted = 0;
+    _bootSector.fileCount[0] = updatedFileCount & 0xFF;
+    _bootSector.fileCount[1] = (updatedFileCount >> 8) & 0xFF;
+
+    _fatEntryCount = updatedFileCount;
+
     writeBootSector(_bootSector);
     delay(5);
     _bootSector = readBootSector();
 
+    deleteVoidFATEntries(fileCount);
+
+    fileLookupList = "";
+    runInitialIndexingAndStore();
     printLogs("Defragmentation complete.\n");
+}
+
+void MjolnFileSystem::showDump(uint32_t start, uint32_t end) {
+    showMemoryDump(MJOLN_STORAGE_DEVICE_ADDRESS, start, end, getAddressSize(), getPageSize());
 }
 
 void MjolnFileSystem::moveData(uint32_t srcAddr, uint32_t dstAddr, uint32_t length)
@@ -690,4 +685,28 @@ void MjolnFileSystem::moveData(uint32_t srcAddr, uint32_t dstAddr, uint32_t leng
         dstAddr += chunk;
         length -= chunk;
     }
+}
+
+void MjolnFileSystem::deleteVoidFATEntries(uint16_t fileCount)
+{
+    int deletedPos = -1;
+    for (uint16_t i = 1; i <= fileCount; i++)
+    {
+        FS_FATEntry entry = readFATEntry(i);
+        if (entry.status == MJOLN_FILE_SYSTEM_FAT_AVAILABLE && deletedPos != -1)
+        {
+            updateFATEntry(deletedPos, entry);
+            entry.status = 0;
+            updateFATEntry(i, entry);
+            deletedPos++;
+        }
+        else if (deletedPos == -1)
+            deletedPos = i;
+    }
+}
+
+void MjolnFileSystem::setPowerMode(AT24CXPowerMode mode)
+{
+    currentPowerMode = mode;
+    eepromSetPowerMode(mode);
 }

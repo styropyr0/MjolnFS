@@ -14,6 +14,16 @@ enum AT24CX_ADDR_SIZE
     AT24CX_16Bit = 0x01 // 16-bit address size
 };
 
+enum AT24CXPowerMode
+{
+    // Low-Power mode. Uses 100KHz clock. Suitable for most operations with reduced power consumption.
+    LOW_POWER = 0x00,
+    // Balanced mode. Uses 400KHz clock. Offers a good balance between performance and power consumption.
+    BALANCED = 0x01,
+    // High-Performance mode. Uses 1MHz clock. Provides the best performance at the cost of increased power consumption.
+    HIGH_PERFORMANCE = 0x02
+};
+
 /**
  * @brief Reads a specified number of bytes from the EEPROM.
  * @param eepromAddr The I2C address of the EEPROM.
@@ -70,6 +80,13 @@ bool deletePartition(uint8_t eepromAddr, uint16_t length);
  * @note The pageSize is used to determine the maximum number of bytes that can be written in a single operation.
  */
 void showMemoryDump(uint8_t eepromAddr, uint16_t start, uint16_t end, AT24CX_ADDR_SIZE addressSize, uint8_t pageSize);
+
+/**
+ * @brief Sets the power mode of the EEPROM.
+ * @param mode The power mode to set.
+ * @note Different power modes may affect the performance and power consumption of the EEPROM. Refer to the EEPROM datasheet for details on the effects of each mode.
+ */
+void eepromSetPowerMode(AT24CXPowerMode mode);
 
 #endif // __cplusplus
 #endif // FILESYSTEM_MANAGER_H

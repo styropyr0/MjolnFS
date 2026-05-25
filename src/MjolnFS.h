@@ -146,6 +146,12 @@ public:
      */
     void defragment();
 
+    /**
+     * @brief Sets the power mode of the EEPROM.
+     * @param mode The power mode to set.
+     */
+    void setPowerMode(AT24CXPowerMode mode);
+
 private:
     uint8_t _deviceAddress; // I2C address of the EEPROM
     uint32_t _eepromSize;   // Size of the EEPROM in bytes
@@ -154,6 +160,7 @@ private:
     AT24CXType _eepromType; // Type of the EEPROM
     bool isInit = false;
     bool loadBalancingState = false;
+    AT24CXPowerMode currentPowerMode = LOW_POWER;
 
     FS_BootSector _bootSector;
     FS_FATEntry tempFatEntry;
@@ -175,6 +182,8 @@ private:
     uint16_t findFileFromCache(const char *filename);
     void runInitialIndexingAndStore();
     void moveData(uint32_t srcAddr, uint32_t dstAddr, uint32_t length);
+    void showDump(uint32_t start, uint32_t end);
+    void deleteVoidFATEntries(uint16_t fileCount);
 
     AT24CX_ADDR_SIZE getAddressSize();
 };

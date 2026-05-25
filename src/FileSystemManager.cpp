@@ -58,6 +58,22 @@ void showMemoryDump(uint8_t eepromAddr, uint16_t start, uint16_t end, AT24CX_ADD
     }
 }
 
+void eepromSetPowerMode(AT24CXPowerMode mode)
+{
+    switch (mode)
+    {
+    case LOW_POWER:
+        Wire.setClock(100000);
+        break;
+    case BALANCED:
+        Wire.setClock(400000);
+        break;
+    case HIGH_PERFORMANCE:
+        Wire.setClock(1000000);
+        break;
+    }
+}
+
 bool eepromDeleteMemoryRange(uint8_t eepromAddr, uint32_t storeAddr, AT24CX_ADDR_SIZE addressSize, uint16_t length, uint8_t pageSize)
 {
     uint16_t bytesWrote = 0;
