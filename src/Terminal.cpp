@@ -44,6 +44,10 @@ void MjolnFileSystem::processCommand(String command)
     }
     else if (command.equals("ls"))
         listFiles();
+    else if (command.equals("clear"))
+        Serial.println("\033[2J\033[H");
+    else if (command.equals("ls -a"))
+        listAllFiles();
     else if (command.startsWith("read "))
     {
         String filename = command.substring(5);

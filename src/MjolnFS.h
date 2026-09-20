@@ -176,6 +176,7 @@ private:
     bool isFileSystemInitialized();
     uint8_t getPageSize();
     uint16_t getUsableSize();
+    void listAllFiles();
     uint16_t getReservedSize();
     void processCommand(String command);
     void extractArgs(String command, String &filename, String &data);
@@ -183,7 +184,7 @@ private:
     void runInitialIndexingAndStore();
     void moveData(uint32_t srcAddr, uint32_t dstAddr, uint32_t length);
     void showDump(uint32_t start, uint32_t end);
-    void deleteVoidFATEntries(uint16_t fileCount);
+    uint16_t getNextAvailableFATEntryIndex();
 
     AT24CX_ADDR_SIZE getAddressSize();
 };
