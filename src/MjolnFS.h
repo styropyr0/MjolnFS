@@ -57,11 +57,10 @@ public:
     /**
      * @brief Reads data from a file.
      * @param filename Name of the file to read.
-     * @param buffer Buffer to store the read data.
-     * @return Length of the file contents.
-     * @note Caller is responsible for deallocating the buffer.
+     * @return Pointer to the buffer containing the file contents, or nullptr if the file is not found.
+     * @note Caller is responsible for deallocating the returned buffer.
      */
-    uint32_t readFile(const char *filename, char *buffer);
+    char *readFile(const char *filename);
 
     /**
      * @brief Updates data in a file.

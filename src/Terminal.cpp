@@ -2,6 +2,8 @@
 
 void MjolnFileSystem::processCommand(String command)
 {
+    bool logState = logEnabled;
+
     if (command.startsWith("mk "))
     {
         String filename, data;
@@ -71,29 +73,33 @@ void MjolnFileSystem::processCommand(String command)
     {
         String filename = command.substring(5);
         filename.trim();
+        showLogs(false);
 
         if (filename.length() > 0)
         {
             FS_FATEntry fatEntry = readFATEntry(findFileFromCache(filename.c_str()));
             uint32_t fileLength = fatEntry.size[0] | (fatEntry.size[1] << 8) | (fatEntry.size[2] << 16);
-            char *buffer = new char[fileLength + 1];
 
-            if (buffer)
+            char *result = readFile(filename.c_str());
+
+            if (result)
             {
-                if (readFile(filename.c_str(), buffer))
-                    Serial.println(buffer);
-                else
-                    Serial.println("ERR: File not found.");
-
-                delete[] buffer;
+                Serial.println(result);
+                delete[] result;
+            }
+            else if (fatEntry.status == MJOLN_FILE_NOT_FOUND || fatEntry.status > MJOLN_FILE_SYSTEM_FAT_AVAILABLE)
+            {
+                Serial.println("ERR: File not found");
             }
             else
             {
-                Serial.println("ERR: Memory allocation failed.");
+                Serial.println("ERR: Memory allocation failed or problem reading the file.");
             }
         }
         else
             Serial.println("Usage: read <filename>");
+
+        showLogs(logState);
     }
     else if (command.equals("info"))
         printFileSystemInfo();
@@ -108,14 +114,16 @@ void MjolnFileSystem::processCommand(String command)
     }
     else if (command.equals("delpart"))
     {
+        showLogs(true);
         format();
         Serial.println("Partition deleted.");
+        showLogs(logState);
     }
     else if (command.equals("storeuse"))
     {
-        Serial.print("Storage Usage: ");
-        Serial.print(getStorageUsage(), 2);
-        Serial.println("%");
+        showLogs(true);
+        getStorageUsage();
+        showLogs(logState);
     }
     else if (command.equals("storeusebytes"))
     {
@@ -124,8 +132,10 @@ void MjolnFileSystem::processCommand(String command)
     }
     else if (command.equals("defrag"))
     {
+        showLogs(false);
         defragment();
         Serial.println("Defragmentation complete.");
+        showLogs(logState);
     }
     else if (command.startsWith("dump "))
     {
