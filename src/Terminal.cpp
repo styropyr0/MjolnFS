@@ -9,7 +9,7 @@ void MjolnFileSystem::processCommand(String command)
 
         if (isFileNameValid(filename.c_str()))
         {
-            if (!filename.isEmpty() && !data.isEmpty())
+            if (filename.length() > 0 && data.length() > 0)
             {
                 if (writeFile(filename.c_str(), data.c_str()))
                     Serial.println("File created.");
@@ -25,7 +25,7 @@ void MjolnFileSystem::processCommand(String command)
         String oldFilename, newFilename;
         extractArgs(command, oldFilename, newFilename);
 
-        if (!oldFilename.isEmpty() && !newFilename.isEmpty())
+        if (oldFilename.length() > 0 && newFilename.length() > 0)
         {
             if (renameFile(oldFilename.c_str(), newFilename.c_str()))
                 Serial.println("File renamed.");
@@ -39,7 +39,7 @@ void MjolnFileSystem::processCommand(String command)
     {
         String filename, data;
         extractArgs(command, filename, data);
-        if (!filename.isEmpty() && !data.isEmpty())
+        if (filename.length() > 0 && data.length() > 0)
         {
             if (updateFile(filename.c_str(), data.c_str()))
                 Serial.println("File updated.");
@@ -53,7 +53,7 @@ void MjolnFileSystem::processCommand(String command)
     {
         String filename = command.substring(3);
         filename.trim();
-        if (!filename.isEmpty())
+        if (filename.length() > 0)
         {
             deleteFile(filename.c_str());
             Serial.println("File deleted.");
@@ -72,7 +72,7 @@ void MjolnFileSystem::processCommand(String command)
         String filename = command.substring(5);
         filename.trim();
 
-        if (!filename.isEmpty())
+        if (filename.length() > 0)
         {
             FS_FATEntry fatEntry = readFATEntry(findFileFromCache(filename.c_str()));
             uint32_t fileLength = fatEntry.size[0] | (fatEntry.size[1] << 8) | (fatEntry.size[2] << 16);
@@ -101,7 +101,7 @@ void MjolnFileSystem::processCommand(String command)
     {
         String filename = command.substring(5);
         filename.trim();
-        if (!filename.isEmpty())
+        if (filename.length() > 0)
             printFileInfo(filename.c_str());
         else
             Serial.println("Usage: info <filename>");
