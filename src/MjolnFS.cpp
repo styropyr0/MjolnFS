@@ -152,8 +152,60 @@ bool MjolnFileSystem::cleanFormat()
     return true;
 }
 
+bool MjolnFileSystem::isFileNameValid(const char *filename)
+{
+    if (strlen(filename) > MJOLN_FILE_NAME_MAX_LENGTH - 1)
+        return false;
+
+    for (size_t i = 0; i < strlen(filename); i++)
+    {
+        char c = filename[i];
+        if (!isalnum(c) && c != '_' && c != '-' && c != '.')
+            return false;
+    }
+    return true;
+}
+
+bool MjolnFileSystem::renameFile(const char *oldFilename, const char *newFilename)
+{
+    if (!isFileNameValid(newFilename))
+    {
+        printLogs("Invalid new file name. File names can only contain alphanumeric characters, underscores (_), hyphens (-), and periods (.).\n");
+        return false;
+    }
+
+    if (!isFileSystemInitialized())
+        return false;
+
+    uint16_t index = checkFileExistence(oldFilename);
+    if (index != MJOLN_FILE_NOT_FOUND)
+    {
+        FS_FATEntry fatEntry = readFATEntry(index);
+        memcpy(fatEntry.filename, newFilename, MJOLN_FILE_NAME_MAX_LENGTH);
+        if (updateFATEntry(index, fatEntry))
+        {
+            fileLookupList.replace(String(oldFilename), String(newFilename));
+            printLogs("File renamed successfully from " + String(oldFilename) + " to " + String(newFilename) + ".\n");
+            return true;
+        }
+        else
+        {
+            printLogs("Failed to rename the file.\n");
+            return false;
+        }
+    }
+    printLogs("File not found: " + String(oldFilename) + ".\n");
+    return false;
+}
+
 bool MjolnFileSystem::updateFile(const char *filename, const char *data)
 {
+    if (!isFileNameValid(filename))
+    {
+        printLogs("Invalid file name. File names can only contain alphanumeric characters, underscores (_), hyphens (-), and periods (.).\n");
+        return false;
+    }
+
     if (!isFileSystemInitialized())
         return false;
 
@@ -215,6 +267,12 @@ bool MjolnFileSystem::updateFile(const char *filename, const char *data)
 
 bool MjolnFileSystem::writeFile(const char *filename, const char *data)
 {
+    if (!isFileNameValid(filename))
+    {
+        printLogs("Invalid file name. File names can only contain alphanumeric characters, underscores (_), hyphens (-), and periods (.).\n");
+        return false;
+    }
+
     if (!isFileSystemInitialized())
         return false;
 
@@ -230,6 +288,11 @@ bool MjolnFileSystem::writeFile(const char *filename, const char *data)
         memcpy(fatEntry.startAddr, _bootSector.lastDataAddr, sizeof(fatEntry.startAddr));
 
         uint16_t nextFATIndex = getNextAvailableFATEntryIndex();
+        FS_FATEntry nextFATEntry;
+        if (nextFATIndex != MJOLN_FILE_NOT_FOUND)
+        {
+            nextFATEntry = readFATEntry(nextFATIndex);
+        }
 
         printLogs("Writing file...\n");
         uint32_t startAddr = _bootSector.lastDataAddr[0] | (_bootSector.lastDataAddr[1] << 8) | (_bootSector.lastDataAddr[2] << 16);
@@ -254,7 +317,9 @@ bool MjolnFileSystem::writeFile(const char *filename, const char *data)
                 }
                 else
                 {
-                    _bootSector.deleted--;
+                    if (_bootSector.deleted > 0)
+                        _bootSector.deleted--;
+                    fileLookupList.replace(String(nextFATEntry.filename), String(fatEntry.filename));
                 }
 
                 writeBootSector(_bootSector);
@@ -378,21 +443,60 @@ void MjolnFileSystem::listFiles()
     bool logState = logEnabled;
     showLogs(true);
 
-    int *fileCount = new int[1];
-    *fileCount = _fatEntryCount - (uint16_t)_bootSector.deleted;
+    uint16_t *fileCount = new uint16_t(_fatEntryCount - (uint16_t)_bootSector.deleted);
 
-    printLogs("FILES LIST\nroot\\\n" + String(*fileCount) + " files found.\n");
+    printLogs(String(*fileCount) + " files found.\n\n");
+
+    printLogs("FILES LIST\n");
+    printLogs("root\\\n\n");
+
+    const uint8_t indexWidth = 10;
+    const uint8_t nameWidth = 24;
+    const uint8_t sizeWidth = 12;
+
+    printLogs(
+        padRight("Index", indexWidth) +
+        padRight("File Name", nameWidth) +
+        padRight("Size", sizeWidth) +
+        "\n");
+
+    printLogs(
+        padRight("-----", indexWidth) +
+        padRight("---------", nameWidth) +
+        padRight("----", sizeWidth) +
+        "\n");
+
     for (uint16_t i = 1; i <= _fatEntryCount; i++)
     {
         tempFatEntry = readFATEntry(i);
+
         if (tempFatEntry.status == MJOLN_FILE_SYSTEM_FAT_UNAVAILABLE)
             continue;
-        printLogs("     " + String(tempFatEntry.filename) + (i % 8 == 0 ? "\n" : ""));
-    }
-    printLogs("\n");
 
-    delete[] fileCount;
-    showLogs(logState);
+        printLogs(
+            padRight(String(i), indexWidth) +
+            padRight(String(tempFatEntry.filename), nameWidth) +
+            padRight(String(tempFatEntry.size[0] | (tempFatEntry.size[1] << 8) | (tempFatEntry.size[2] << 16)) +
+                         (tempFatEntry.size[0] | (tempFatEntry.size[1] << 8) | (tempFatEntry.size[2] << 16) > 1023 ? "B" : "KB"),
+                     sizeWidth) +
+            "\n");
+    }
+
+    printLogs("\n");
+    delete fileCount;
+}
+
+String MjolnFileSystem::padRight(const String &value, uint8_t width)
+{
+    String result = value;
+
+    if (result.length() >= width)
+        return result.substring(0, width);
+
+    while (result.length() < width)
+        result += " ";
+
+    return result;
 }
 
 void MjolnFileSystem::listAllFiles()
@@ -403,16 +507,48 @@ void MjolnFileSystem::listAllFiles()
     bool logState = logEnabled;
     showLogs(true);
 
-    printLogs("FILES LIST\nroot\\\n");
-    printLogs(String(_fatEntryCount) + " files found.\n");
+    uint16_t *fileCount = new uint16_t(_fatEntryCount - (uint16_t)_bootSector.deleted);
+
+    printLogs(String(*fileCount) + " files found.\n\n");
+
+    printLogs("FILES LIST\n");
+    printLogs("root\\\n\n");
+
+    const uint8_t indexWidth = 10;
+    const uint8_t nameWidth = 24;
+    const uint8_t sizeWidth = 12;
+    const uint8_t statusWidth = 12;
+
+    printLogs(
+        padRight("Index", indexWidth) +
+        padRight("File Name", nameWidth) +
+        padRight("Size", sizeWidth) +
+        padRight("Status", statusWidth) +
+        "\n");
+
+    printLogs(
+        padRight("-----", indexWidth) +
+        padRight("---------", nameWidth) +
+        padRight("----", sizeWidth) +
+        padRight("------", statusWidth) +
+        "\n");
+
     for (uint16_t i = 1; i <= _fatEntryCount; i++)
     {
         tempFatEntry = readFATEntry(i);
-        printLogs("     " + String(tempFatEntry.filename) + (i % 8 == 0 ? "\n" : ""));
-    }
-    printLogs("\n");
 
-    showLogs(logState);
+        printLogs(
+            padRight(String(i), indexWidth) +
+            padRight(String(tempFatEntry.filename), nameWidth) +
+            padRight(String(tempFatEntry.size[0] | (tempFatEntry.size[1] << 8) | (tempFatEntry.size[2] << 16)) +
+                         (tempFatEntry.size[0] | (tempFatEntry.size[1] << 8) | (tempFatEntry.size[2] << 16) > 1023 ? "B" : "KB"),
+                     sizeWidth) +
+            padRight(tempFatEntry.status == MJOLN_FILE_SYSTEM_FAT_AVAILABLE ? "AVAILABLE" : "DELETED", statusWidth) +
+            "\n");
+    }
+
+    printLogs("\n");
+    delete fileCount;
 }
 
 void MjolnFileSystem::showLogs(bool show)

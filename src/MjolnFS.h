@@ -152,6 +152,15 @@ public:
      */
     void setPowerMode(AT24CXPowerMode mode);
 
+    /**
+     * @brief Renames a file in the file system.
+     * @param oldFilename The current name of the file.
+     * @param newFilename The new name for the file.
+     * @return True if renaming succeeds, false otherwise.
+     * @note The new filename must not already exist in the system.
+     */
+    bool renameFile(const char *oldFilename, const char *newFilename);
+
 private:
     uint8_t _deviceAddress; // I2C address of the EEPROM
     uint32_t _eepromSize;   // Size of the EEPROM in bytes
@@ -185,6 +194,8 @@ private:
     void moveData(uint32_t srcAddr, uint32_t dstAddr, uint32_t length);
     void showDump(uint32_t start, uint32_t end);
     uint16_t getNextAvailableFATEntryIndex();
+    bool isFileNameValid(const char *filename);
+    String padRight(const String &value, uint8_t width);
 
     AT24CX_ADDR_SIZE getAddressSize();
 };
