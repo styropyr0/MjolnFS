@@ -504,6 +504,7 @@ void MjolnFileSystem::listFiles()
 
     printLogs("\n");
     delete fileCount;
+    showLogs(logState);
 }
 
 String MjolnFileSystem::padRight(const String &value, uint8_t width)
@@ -569,6 +570,7 @@ void MjolnFileSystem::listAllFiles()
 
     printLogs("\n");
     delete fileCount;
+    showLogs(logState);
 }
 
 void MjolnFileSystem::showLogs(bool show)
