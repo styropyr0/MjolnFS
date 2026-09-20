@@ -244,12 +244,14 @@ bool MjolnFileSystem::updateFile(const char *filename, const char *data)
     if (index != MJOLN_FILE_NOT_FOUND)
     {
         bool logState = logEnabled;
-        if (logEnabled)
-            showLogs(false);
+        showLogs(false);
+        bool res = deleteFile(filename);
         uint16_t nextFATIndex = getNextAvailableFATEntryIndex();
-        bool res = deleteFile(filename) && writeFile(filename, data);
-        if (logEnabled)
-            showLogs(logEnabled);
+        
+        if (nextFATIndex == MJOLN_FILE_NOT_FOUND)
+            nextFATIndex = _fatEntryCount + 1;
+        
+        res = res && writeFile(filename, data);
         if (!res)
         {
             printLogs("Failed to update the file data.\n");
@@ -258,6 +260,7 @@ bool MjolnFileSystem::updateFile(const char *filename, const char *data)
 
         FS_FATEntry fatEntry = readFATEntry(nextFATIndex);
         char *updatedData = readFile(filename);
+        showLogs(logState);
 
         if (logEnabled)
         {
@@ -269,7 +272,7 @@ bool MjolnFileSystem::updateFile(const char *filename, const char *data)
             printLogs("File start address: " + String(fatEntry.startAddr[0] | (fatEntry.startAddr[1] << 8) | (fatEntry.startAddr[2] << 16)) + "\n");
             printLogs("File status: " + String(fatEntry.status) + "\n");
             printLogs("File data: ");
-            printLogs(updatedData);
+            printLogs(String(updatedData));
             printLogs("\n\n");
         }
 

@@ -3,6 +3,7 @@
 bool eepromReadBytes(uint8_t eepromAddr, uint32_t storeAddr, AT24CX_ADDR_SIZE addressSize, uint8_t *buffer, uint16_t length, uint8_t pageSize)
 {
     uint16_t bytesRead = 0;
+    delay(5);
     while (length > 0)
     {
         uint16_t remainingPageSize = min(length, (uint16_t)(pageSize - (storeAddr % pageSize)));
