@@ -28,7 +28,7 @@
 #define MJOLN_FILE_SYSTEM_CACHING_LIMIT 10       // The limit for lookup file list for improved file system reads and checks
 
 #define MJOLN_STORAGE_DEVICE_ADDRESS 0x50        // I2C address of the EEPROM device
-#define MJOLN_MIN_SUPPORTED_VERSION 1            // Minimum supported version of the Mjoln EEPROM File System
+#define MJOLN_MIN_SUPPORTED_VERSION 2            // Minimum supported version of the Mjoln EEPROM File System
 
 
 #define MJOLN_FS_MERR_NO_ERROR 0x00                 // No error
