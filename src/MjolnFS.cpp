@@ -87,7 +87,7 @@ bool MjolnFileSystem::mount()
         uint32_t lastDataAddr = _bootSector.lastDataAddr[0] | (_bootSector.lastDataAddr[1] << 8) | (_bootSector.lastDataAddr[2] << 16);
 
         printLogs("Mounting file system...\n");
-        printLogs("File system mounted.");
+        printLogs("File system mounted.\n\n");
 
         printLogs("\nMjoln File System\n-----------------\n");
         printLogs("EEPROM type: " + String(_eepromType) + "\n");
@@ -348,7 +348,7 @@ bool MjolnFileSystem::writeFile(const char *filename, const char *data)
 
         return true;
     }
-    printLogs("Couldn't write this file. File already exists!\n");
+    printLogs("Couldn't write this file. File already exists!\n\n");
     return false;
 }
 
@@ -652,7 +652,6 @@ void MjolnFileSystem::printFileInfo(const char *filename)
         printLogs("File name: " + String(tempFatEntry.filename) + "\n");
         printLogs("File size: " + String(length) + " Bytes\n");
         printLogs("File start address: " + String(startAddr) + "\n");
-        printLogs("File status: " + String(tempFatEntry.status == MJOLN_FILE_SYSTEM_FAT_AVAILABLE ? "AVAILABLE\n" : "DELETED\n") + "\n");
         printLogs("\n\n");
     }
     else
