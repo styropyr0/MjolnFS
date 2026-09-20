@@ -6,15 +6,34 @@ void MjolnFileSystem::processCommand(String command)
     {
         String filename, data;
         extractArgs(command, filename, data);
-        if (!filename.isEmpty() && !data.isEmpty())
+
+        if (isFileNameValid(filename.c_str()))
         {
-            if (writeFile(filename.c_str(), data.c_str()))
-                Serial.println("File created.");
+            if (!filename.isEmpty() && !data.isEmpty())
+            {
+                if (writeFile(filename.c_str(), data.c_str()))
+                    Serial.println("File created.");
+                else
+                    Serial.println("ERR: File already exists!");
+            }
             else
-                Serial.println("ERR: File already exists!");
+                Serial.println("Usage: mk <filename> <data>");
+        }
+    }
+    else if (command.startsWith("rename "))
+    {
+        String oldFilename, newFilename;
+        extractArgs(command, oldFilename, newFilename);
+
+        if (!oldFilename.isEmpty() && !newFilename.isEmpty())
+        {
+            if (renameFile(oldFilename.c_str(), newFilename.c_str()))
+                Serial.println("File renamed.");
+            else
+                Serial.println("ERR: File not found or rename failed!");
         }
         else
-            Serial.println("Usage: mk <filename> <data>");
+            Serial.println("Usage: rename <old_filename> <new_filename>");
     }
     else if (command.startsWith("update "))
     {
@@ -28,7 +47,7 @@ void MjolnFileSystem::processCommand(String command)
                 Serial.println("ERR: File not found!");
         }
         else
-            Serial.println("Usage: mk <filename> <data>");
+            Serial.println("Usage: update <filename> <data>");
     }
     else if (command.startsWith("rm "))
     {
@@ -55,7 +74,10 @@ void MjolnFileSystem::processCommand(String command)
 
         if (!filename.isEmpty())
         {
-            char *buffer = new char[256];
+            FS_FATEntry fatEntry = readFATEntry(findFileFromCache(filename.c_str()));
+            uint32_t fileLength = fatEntry.size[0] | (fatEntry.size[1] << 8) | (fatEntry.size[2] << 16);
+            char *buffer = new char[fileLength + 1];
+
             if (buffer)
             {
                 if (readFile(filename.c_str(), buffer))
@@ -149,10 +171,17 @@ void MjolnFileSystem::processCommand(String command)
         Serial.println("ls - List all files in the system.");
         Serial.println("read <filename> - Read and display the contents of a file.");
         Serial.println("info - Display information about the file system.");
+        Serial.println("rename <old_filename> <new_filename> - Rename an existing file.");
+        Serial.println("ls -a - List all files, including deleted ones.");
+        Serial.println("info <filename> - Display information about a specific file.");
         Serial.println("delpart - Format the file system, erasing all data.");
         Serial.println("storeuse - Show storage usage as a percentage.");
         Serial.println("storeusebytes - Show storage usage in bytes.");
         Serial.println("defrag - Defragment the file system to optimize storage.\n");
+        Serial.println("dump <start_address> <end_address> - Dump EEPROM data between specified addresses.");
+        Serial.println("sysinfo - Display system information.");
+        Serial.println("help - Show this help message.");
+        Serial.println("exit - Exit the terminal interface.");
     }
     else
         Serial.println("Unknown command.");
