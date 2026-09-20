@@ -1,7 +1,7 @@
 # MjolnFileSystem  
 **Author:** Saurav Sajeev  
-**Description:** A file system designed for EEPROM storage management using AT24C series chips.
-**Latest version:** 1.0.0
+**Description:** A file system designed for EEPROM storage management using AT24C series chips.  
+**Latest version:** 1.0.1
 
 ---
 
@@ -16,6 +16,7 @@
    - Initialization and Mounting  
    - File Operations  
    - File System Information  
+   - Power Management  
    - Terminal Interaction  
 8. [Notes](#notes)  
 9. [Warnings](#warnings)  
@@ -24,7 +25,9 @@
 ---
 
 ## Overview
-MjolnFileSystem is a lightweight, structured file system built for AT24C-series EEPROM chips. It provides functionality for file storage, retrieval, deletion, and system monitoring while optimizing memory usage. Designed for embedded systems, it allows efficient data management in constrained memory environments.
+MjolnFileSystem is a lightweight, structured file system built for AT24C-series EEPROM chips. It provides functionality for file storage, retrieval, deletion, renaming, and system monitoring while optimizing memory usage. Designed for embedded systems, it allows efficient data management in constrained memory environments.
+
+On-disk format version is **2**. Mounting rejects unsupported boot sectors and prompts for `format()` when a version upgrade is required.
 
 ---
 
@@ -51,18 +54,23 @@ The correct EEPROM model must be selected when initializing the file system.
 
 ## Features
 
-* **File Management:** Create, read, update, delete, and list files stored in EEPROM.
+* **File Management:** Create, read, update, rename, delete, and list files stored in EEPROM.
+* **Filename Validation:** Names are checked for length and allowed characters before create/update/rename.
+* **FAT Reuse:** Unclaimed (deleted) FAT entries are reused when writing new files.
 * **Storage Monitoring:** Retrieve storage usage information, including percentage and bytes used.
 * **System Control:** Print file system details, format EEPROM, and manage logs.
 * **EEPROM Formatting:**
 
-  * `format()`: Resets the boot sector and erases all data.
+  * `format()`: Resets the boot sector and erases all data (also updates on-disk FS version).
   * `cleanFormat()`: Erases all data without reflashing the boot sector.
+* **Defragmentation:** Compacts file data after deletions and size-increasing updates.
+* **Power Modes:** Switch EEPROM I2C clock speed between low power, balanced, and high performance.
+* **Version-Aware Mounting:** Boot sector verification returns specific error codes for invalid signature, unsupported version, or outdated-but-mountable layouts.
 * **Serial Terminal Interaction:** Execute commands via the serial interface for real-time file system management.
 * **Performance Optimization:**
 
   * Efficient file caching.
-  * Boot-time one time indexing which creates a lookup table for faster access.
+  * Boot-time one-time indexing which creates a lookup table for faster access.
 
 ---
 
@@ -71,8 +79,8 @@ The correct EEPROM model must be selected when initializing the file system.
 1. **Clone the Repository**
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/MjolnFileSystem.git
-cd MjolnFileSystem
+git clone https://github.com/styropyr0/MjolnFS.git
+cd MjolnFS
 ```
 
 2. **Initialize and Mount the File System**
@@ -80,7 +88,7 @@ cd MjolnFileSystem
 ```cpp
 MjolnFileSystem fs(AT24C32);  // Initialize with chosen EEPROM model
 if (!fs.mount()) {
-    fs.format();  // Format EEPROM if unrecognized
+    fs.format();  // Format EEPROM if unrecognized or version-incompatible
 }
 ```
 
@@ -99,10 +107,11 @@ fs.writeFile("config", "settings123");
 **Reading Data from a File**
 
 ```cpp
-char buffer[256]; // Allocate buffer
-uint32_t length = fs.readFile("config", buffer);
-Serial.println(buffer);
-delete[] buffer; // Free memory after use
+char *buffer = fs.readFile("config");
+if (buffer) {
+    Serial.println(buffer);
+    delete[] buffer;  // Caller must free the returned buffer
+}
 ```
 
 **Updating File Data**
@@ -111,10 +120,16 @@ delete[] buffer; // Free memory after use
 fs.updateFile("config", "newsettings456");
 ```
 
+**Renaming a File**
+
+```cpp
+fs.renameFile("config", "settings");
+```
+
 **Deleting a File**
 
 ```cpp
-fs.deleteFile("config.txt");
+fs.deleteFile("config");
 ```
 
 **Listing Stored Files**
@@ -123,25 +138,46 @@ fs.deleteFile("config.txt");
 fs.listFiles();
 ```
 
+**Defragmenting**
+
+```cpp
+fs.defragment();
+```
+
+**Setting Power Mode**
+
+```cpp
+fs.setPowerMode(BALANCED);         // 400 kHz
+fs.setPowerMode(HIGH_PERFORMANCE); // 1 MHz
+fs.setPowerMode(LOW_POWER);        // 100 kHz (default)
+```
+
 ---
 
 ## Command Set
 
 The `terminal()` function supports various commands for file system interactions.
 
-| Command                  | Description                     | Example                     |
+| Command | Description | Example |
 | ------------------------ | ------------------------------- | --------------------------- |
-| mk `<filename>` `<data>` | Create a file and write data    | `mk config.txt settings123` |
-| rm `<filename>`          | Delete a specified file         | `rm config.txt`             |
-| ls                       | List all available files        | `ls`                        |
-| read `<filename>`        | Read a file's contents          | `read config.txt`           |
-| update `<filename>` `<data>`   | Update a file's contents  | `update config.txt`         |
-| info                     | Display file system information | `info`                      |
-| delpart                  | Format EEPROM and erase data    | `delpart`                   |
-| storeuse                 | Show storage usage %            | `storeuse`                  |
-| storeusebytes            | Show total used bytes           | `storeusebytes`             |
-| defrag                   | Defragment the file system      | `defrag`                    |
-| exit                     | Exit the terminal session       | `exit`                      |
+| `mk <filename> <data>` | Create a file and write data | `mk config settings123` |
+| `update <filename> <data>` | Update a file's contents | `update config newsettings` |
+| `rename <old> <new>` | Rename an existing file | `rename config settings` |
+| `rm <filename>` | Delete a specified file | `rm config` |
+| `ls` | List all available files | `ls` |
+| `ls -a` | List all files, including deleted ones | `ls -a` |
+| `read <filename>` | Read a file's contents | `read config` |
+| `info` | Display file system information | `info` |
+| `info <filename>` | Display information about a specific file | `info config` |
+| `delpart` | Format EEPROM and erase data | `delpart` |
+| `storeuse` | Show storage usage % | `storeuse` |
+| `storeusebytes` | Show total used bytes | `storeusebytes` |
+| `defrag` | Defragment the file system | `defrag` |
+| `dump <start> <end>` | Dump EEPROM bytes in a range | `dump 0 64` |
+| `sysinfo` | Show system / FS version info | `sysinfo` |
+| `clear` | Clear the serial terminal view | `clear` |
+| `help` | Show available commands | `help` |
+| `exit` | Exit the terminal session | `exit` |
 
 ---
 
@@ -155,7 +191,10 @@ bool mount();
 ```
 
 * Initializes the file system with the selected EEPROM model.
-* Use `format()` before mounting if the EEPROM is unrecognized.
+* `mount()` verifies the boot sector signature and version:
+  * Compatible version → mounts successfully.
+  * Older-but-supported layout → mounts and advises updating via `format()`.
+  * Unsupported / newer / invalid signature → fails; call `format()` before use.
 
 ---
 
@@ -163,16 +202,20 @@ bool mount();
 
 ```cpp
 bool writeFile(const char *filename, const char *data);
-uint32_t readFile(const char *filename, char *buffer);
+char *readFile(const char *filename);
 bool deleteFile(const char *filename);
 bool updateFile(const char *filename, const char *data);
+bool renameFile(const char *oldFilename, const char *newFilename);
 void listFiles();
+void defragment();
 ```
 
-* **writeFile()**: Creates and writes data to a file.
-* **readFile()**: Reads file contents into a dynamically allocated buffer. Caller must free it.
+* **writeFile()**: Creates and writes data to a file (reuses free FAT slots when available).
+* **readFile()**: Allocates and returns a null-terminated buffer with the file contents, or `nullptr` if not found. Caller must free it with `delete[]`.
 * **deleteFile()**: Deletes the specified file.
-* **updateFile()**: Updates the contents of a file, replacing any existing data.
+* **updateFile()**: Updates the contents of a file by replacing existing data (delete + rewrite).
+* **renameFile()**: Renames a file. The new name must be valid and must not already exist.
+* **defragment()**: Compacts file data to remove holes left by deletions and growing updates.
 
 ```cpp
 /**
@@ -200,9 +243,26 @@ void showLogs(bool show);
 ```
 
 * Print file system and file-specific information.
-* `format()` and `cleanFormat()` clear EEPROM data.
+* `format()` and `cleanFormat()` clear EEPROM data. Prefer `format()` when upgrading FS version.
 * `getStorageUsage()` returns the usage percentage.
 * `showLogs()` enables or disables debug logs.
+
+---
+
+## Power Management
+
+```cpp
+enum AT24CXPowerMode {
+    LOW_POWER = 0x00,         // 100 kHz
+    BALANCED = 0x01,          // 400 kHz
+    HIGH_PERFORMANCE = 0x02   // 1 MHz
+};
+
+void setPowerMode(AT24CXPowerMode mode);
+```
+
+* Adjusts the I2C clock used for EEPROM access.
+* Default mode is `LOW_POWER`.
 
 ---
 
@@ -244,34 +304,30 @@ void MjolnFileSystem::runInitialIndexingAndStore();
 
 ## Notes
 
-* **Memory Management**: Caller is responsible for freeing memory returned by `readFile()`:
+* **Memory Management**: `readFile()` allocates the result on the heap. Always free it when done:
 
 ```cpp
-char* buffer = new char[256];
-uint32_t len = fs.readFile("config", buffer);
-Serial.println(buffer);
-delete[] buffer;
+char *buffer = fs.readFile("config");
+if (buffer) {
+    Serial.println(buffer);
+    delete[] buffer;
+}
 ```
 
-* **File System Formatting**: Use `delpart` or `format()` with caution; all data will be erased.
+* **File System Formatting**: Use `delpart` or `format()` with caution; all data will be erased. Use `format()` to upgrade an outdated on-disk FS version.
 
-* **Serial Communication**: Ensure commands sent to `terminal()` are well-formatted.
+* **Serial Communication**: Ensure commands sent to `terminal()` are well-formatted. Use `help` for the full command list.
 
 ---
 
 ## Warnings
 
-* **FAT Entry Size Limitation**: Filenames are limited to 8 characters due to a 16-byte FAT entry size. Exceeding this may cause file errors.
+* **Filename Limits**: Filenames are limited to **8 characters**. Allowed characters are alphanumeric, underscore (`_`), hyphen (`-`), and period (`.`). Invalid names are rejected on create, update, and rename.
+* **Version Compatibility**: EEPROMs formatted with an unsupported FS version will fail to mount until reformatted with `format()`.
+* **Data Loss**: Formatting and `delpart` permanently erase all stored files.
 
 ---
 
 ## License
 
 This project is licensed under the **MIT License**. You are free to use, modify, and distribute it for personal or commercial purposes.
-
----
-
-```
-
-Let me know if you'd like this converted into an actual `README.md` file or need further enhancements (e.g., diagram of internal architecture, example terminal session logs, etc.).
-```
