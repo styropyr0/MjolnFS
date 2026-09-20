@@ -17,7 +17,6 @@ FS_BootSector MjolnFileSystem::readBootSector()
 bool MjolnFileSystem::writeBootSector(const FS_BootSector &bootSector)
 {
     uint8_t *buffer = bootSectorToBytes(&bootSector);
-    printLogs("Writing boot sector...\n");
     if (eepromWriteBytes(MJOLN_STORAGE_DEVICE_ADDRESS, 0, getAddressSize(), buffer, sizeof(FS_BootSector), getPageSize()))
     {
         printLogs("Boot sector written successfully.\n");
@@ -80,7 +79,13 @@ bool MjolnFileSystem::mount()
 {
     Wire.begin();
     _bootSector = readBootSector();
-    if (verifyBootSector(&_bootSector))
+
+    uint8_t verificationResult = verifyBootSector(&_bootSector);
+
+    switch (verificationResult)
+    {
+    case MJOLN_FS_SUCCESS_BUT_VERSION_MISMATCH:
+    case MJOLN_FS_MERR_NO_ERROR:
     {
         _pageSize = _bootSector.pageSize;
         _fatEntryCount = _bootSector.fileCount[0] | (_bootSector.fileCount[1] << 8);
@@ -100,13 +105,38 @@ bool MjolnFileSystem::mount()
         defragment();
         getBytesUsed();
         runInitialIndexingAndStore();
+
+        if (verificationResult == MJOLN_FS_SUCCESS_BUT_VERSION_MISMATCH)
+            Serial.println("You may need to update your Mjoln File System to version " + String(MJOLN_FILE_SYSTEM_VERSION) + ".\nFormat using format() function to update the file system.\n");
+
+        return true;
     }
-    else
+
+    case MJOLN_FS_MERR_INVALID_SIGNATURE:
     {
-        printLogs("Invalid file system signature.\n");
+        Serial.println("Invalid file system signature.\n");
+        return false;
+        break;
+    }
+
+    case MJOLN_FS_MERR_VERSION_MISMATCH:
+    {
+        Serial.println("Failed to mount file system.\nFile system version mismatch. Expected version: " + String(MJOLN_FILE_SYSTEM_VERSION) + ", Found version: " + String(_bootSector.version) + "\nUpdate the file system using the format() function.\n");
+        return false;
+        break;
+    }
+
+    case MJOLN_FS_MERR_INVALID_BOOT_SECTOR:
+    {
+        Serial.println("Invalid boot sector.\n");
+        return false;
+        break;
+    }
+
+    default:
+        Serial.println("Unknown error occurred while mounting the file system.\n");
         return false;
     }
-    return true;
 }
 
 bool MjolnFileSystem::format()

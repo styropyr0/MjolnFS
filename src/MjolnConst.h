@@ -10,7 +10,7 @@
  * @note The constants are used in the Mjoln EEPROM File System implementation.
  */
 
-#define MJOLN_FILE_SYSTEM_VERSION 1              // Version of the Mjoln EEPROM File System
+#define MJOLN_FILE_SYSTEM_VERSION 2              // Version of the Mjoln EEPROM File System
 #define MJOLN_SIGNATURE "MjolnFS"                // Signature to identify the file system
 #define MJOLN_FILE_NAME_MAX_LENGTH 9             // Maximum length of the file name
 #define MJOLN_FILE_SYSTEM_SIGNATURE_SIZE 8       // Length of the file system signature
@@ -27,6 +27,14 @@
 #define MJOLN_FILE_NOT_FOUND 0                   // The default value to be returned when file is not found
 #define MJOLN_FILE_SYSTEM_CACHING_LIMIT 10       // The limit for lookup file list for improved file system reads and checks
 
-#define MJOLN_STORAGE_DEVICE_ADDRESS 0x50 // I2C address of the EEPROM device
+#define MJOLN_STORAGE_DEVICE_ADDRESS 0x50        // I2C address of the EEPROM device
+#define MJOLN_MIN_SUPPORTED_VERSION 1            // Minimum supported version of the Mjoln EEPROM File System
+
+
+#define MJOLN_FS_MERR_NO_ERROR 0x00                 // No error
+#define MJOLN_FS_MERR_INVALID_BOOT_SECTOR 0xE1      // Invalid boot sector
+#define MJOLN_FS_MERR_VERSION_MISMATCH 0xE2         // Version mismatch
+#define MJOLN_FS_MERR_INVALID_SIGNATURE 0xE3        // Invalid signature
+#define MJOLN_FS_SUCCESS_BUT_VERSION_MISMATCH 0xE4  // File not found
 
 #endif // MJOLN_CONST_H

@@ -41,10 +41,10 @@ uint8_t *bootSectorToBytes(const FS_BootSector *bootSector);
 /**
  * @brief Verifies the boot sector.
  * @param bootSector Pointer to the FS_BootSector structure.
- * @return true if the boot sector is valid, false otherwise.
+ * @return MJOLN_FS_MERR_NO_ERROR if the boot sector is valid, otherwise returns an error code.
  * @note This function checks the signature and version of the boot sector.
  */
-bool verifyBootSector(FS_BootSector *bootSector);
+uint8_t verifyBootSector(FS_BootSector *bootSector);
 
 #endif // __cplusplus
 #endif // FS_BOOTSECTOR_H

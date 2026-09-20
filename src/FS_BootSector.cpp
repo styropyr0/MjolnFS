@@ -34,13 +34,17 @@ uint8_t *bootSectorToBytes(const FS_BootSector *bootSector)
     return buffer;
 }
 
-bool verifyBootSector(FS_BootSector *bootSector)
+uint8_t verifyBootSector(FS_BootSector *bootSector)
 {
     if (memcmp(bootSector->signature, MJOLN_SIGNATURE, MJOLN_FILE_SYSTEM_SIGNATURE_SIZE) != 0)
-        return false;
+        return MJOLN_FS_MERR_INVALID_SIGNATURE;
 
-    if (bootSector->version != MJOLN_FILE_SYSTEM_VERSION)
-        return false;
+    if (bootSector->version < MJOLN_MIN_SUPPORTED_VERSION)
+        return MJOLN_FS_MERR_VERSION_MISMATCH;
+    else if (bootSector->version < MJOLN_FILE_SYSTEM_VERSION)
+        return MJOLN_FS_SUCCESS_BUT_VERSION_MISMATCH;
+    else if (bootSector->version > MJOLN_FILE_SYSTEM_VERSION)
+        return MJOLN_FS_MERR_VERSION_MISMATCH;
 
-    return true;
+    return MJOLN_FS_MERR_NO_ERROR;
 }
