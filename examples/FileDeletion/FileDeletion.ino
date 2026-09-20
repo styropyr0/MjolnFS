@@ -11,8 +11,8 @@ void setup()
         fs.format(); // Initially, the eeprom shall be formatted with MjolnFS File System's Boot sector
     fs.writeFile("test", "Maupertuis set about generalising his earlier mathematical work.");
     fs.deleteFile("test");
-    char fileBuffer[350]; // Or dynamically allocate the space
-    if (fs.readFile("test", fileBuffer) > 0)
+    char *fileBuffer = fs.readFile("test"); // Or dynamically allocate the space
+    if (fileBuffer)
     {
         Serial.print("File content: ");
         Serial.println(fileBuffer);
